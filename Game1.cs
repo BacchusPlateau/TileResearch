@@ -24,16 +24,19 @@ namespace TileResearch
         
         //15x10
         //                       1
-        //   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4
-            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},  //0
-            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //1
-            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //3
-            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //4
-            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //5
-            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //6
-            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //7
-            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //8
-            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,1}   //9
+        //   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},  //0
+            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //1
+            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //2
+            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //3
+            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //4
+            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //5
+            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //6
+            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //7
+            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //8
+            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //9
+            {0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0},  //10
+            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1}   //11
         };
 
 
@@ -44,8 +47,8 @@ namespace TileResearch
             IsMouseVisible = true;
 
             //have grok explain the two below settings
-            graphics.PreferredBackBufferWidth = 960;
-            graphics.PreferredBackBufferHeight = 640;
+            graphics.PreferredBackBufferWidth = 1080;
+            graphics.PreferredBackBufferHeight = 800;
 
             graphics.ApplyChanges();
         }
@@ -128,6 +131,7 @@ namespace TileResearch
             int tilesX = (int)(logicalWidth / tileSize) + 2;
             int tilesY = (int)(logicalHeight / tileSize) + 2;
 
+            //use Math.Max/Min to put a floor on the minimum X and Y values
             int startX = Math.Max(0, playerGridX - tilesX / 2);
             int startY = Math.Max(0, playerGridY - tilesY / 2);
             int endX = Math.Min(map.GetLength(1), startX + tilesX);
