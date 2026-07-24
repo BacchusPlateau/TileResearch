@@ -10,20 +10,20 @@ namespace Ecalpon
 {
     public class TheGame : Game
     {
-        private bool _inCombat = true;  // true for now to test combat screen
-        private GraphicsDeviceManager graphics;
-        private SpriteBatch spriteBatch;
-        private Texture2D rogueSword;
-        private Texture2D tileset;
+        private bool InCombat = true;  // true for now to test combat screen
+        private GraphicsDeviceManager Graphics;
+        private SpriteBatch SpriteBatch;
+        private Texture2D RogueSword;
+        private Texture2D Tileset;
         private int TilesPerRow = 8;
-        private float scale = 2.0f;
-        private Vector2 spritePosition;
-        private int playerGridX = 7;  // Starting position on the map
-        private int playerGridY = 5;
-        private float tileSize = 32.0f;  // Raw world tile size (matches sprite)
-        private KeyboardState previousKeyboardState;
-		private CombatScreen _combatScreen;
-		private SpriteFont _combatFont;
+        private float Scale = 2.0f;
+        private Vector2 SpritePosition;
+        private int PlayerGridX = 7;  // Starting position on the map
+        private int PlayerGridY = 5;
+        private float TileSize = 32.0f;  // Raw world tile size (matches sprite)
+        private KeyboardState PreviousKeyboardState;
+		private CombatScreen CombatScreen;
+		private SpriteFont CombatFont;
 
 		private int[,] map = new int[,]
         {   
@@ -48,15 +48,15 @@ namespace Ecalpon
 
         public TheGame()
         {
-            graphics = new GraphicsDeviceManager(this);
+            Graphics = new GraphicsDeviceManager(this);
             Content.RootDirectory = "Content";
             IsMouseVisible = true;
 
             //have grok explain the two below settings
-            graphics.PreferredBackBufferWidth = 1080;
-            graphics.PreferredBackBufferHeight = 800;
+            Graphics.PreferredBackBufferWidth = 1080;
+            Graphics.PreferredBackBufferHeight = 800;
 
-            graphics.ApplyChanges();
+            Graphics.ApplyChanges();
         }
 
         protected override void Initialize()
@@ -66,15 +66,15 @@ namespace Ecalpon
 
         protected override void LoadContent()
         {
-            spriteBatch = new SpriteBatch(GraphicsDevice);
+            SpriteBatch = new SpriteBatch(GraphicsDevice);
 
             // Original assets
-            rogueSword = Content.Load<Texture2D>("sprites/rogueSword");
-            tileset = Content.Load<Texture2D>("sheets/t1");
+            RogueSword = Content.Load<Texture2D>("sprites/rogueSword");
+            Tileset = Content.Load<Texture2D>("sheets/t1");
 
             // Combat screen setup
-            _combatFont = Content.Load<SpriteFont>("fonts/CombatFont");
-            _combatScreen = new CombatScreen(spriteBatch, _combatFont, GraphicsDevice);
+            CombatFont = Content.Load<SpriteFont>("fonts/CombatFont");
+            CombatScreen = new CombatScreen(SpriteBatch, CombatFont, GraphicsDevice);
 
             // Test combat encounter
             List<Combatant> party = new List<Combatant>
@@ -112,7 +112,7 @@ namespace Ecalpon
                     DamageBonus = 0,
                     Level = 1,
                     MaxMoves = 2,
-                    GridRow = 4,
+                    GridRow = 11,
                     GridCol = 7
                 },
                 new Combatant
@@ -133,48 +133,54 @@ namespace Ecalpon
                 }
             };
 
-            _combatScreen.BeginCombat(party, enemies);
+            CombatScreen.BeginCombat(party, enemies);
         }
 
         protected override void Update(GameTime gameTime)
         {
-            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed ||
-                    Keyboard.GetState().IsKeyDown(Keys.Escape))
+            KeyboardState currentKeyboardState = Keyboard.GetState();
+
+            bool escapeJustPressed = currentKeyboardState.IsKeyDown(Keys.Escape)
+                && PreviousKeyboardState.IsKeyUp(Keys.Escape);
+
+            bool escapeShouldQuit = !(InCombat && CombatScreen.CurrentState == CombatState.SelectingTarget);
+
+            bool backButtonPressed = GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed;
+
+            if (backButtonPressed || (escapeJustPressed && escapeShouldQuit))
                 Exit();
 
-            if (_inCombat)
+            if (InCombat)
             {
-                _combatScreen.Update(gameTime);
+                CombatScreen.Update(gameTime);
             }
             else
             {
-                KeyboardState currentKeyboardState = Keyboard.GetState();
+                if (currentKeyboardState.IsKeyDown(Keys.W) && PreviousKeyboardState.IsKeyUp(Keys.W))
+                    PlayerGridY--;
 
-                if (currentKeyboardState.IsKeyDown(Keys.W) && previousKeyboardState.IsKeyUp(Keys.W))
-                    playerGridY--;
+                if (currentKeyboardState.IsKeyDown(Keys.S) && PreviousKeyboardState.IsKeyUp(Keys.S))
+                    PlayerGridY++;
 
-                if (currentKeyboardState.IsKeyDown(Keys.S) && previousKeyboardState.IsKeyUp(Keys.S))
-                    playerGridY++;
+                if (currentKeyboardState.IsKeyDown(Keys.A) && PreviousKeyboardState.IsKeyUp(Keys.A))
+                    PlayerGridX--;
 
-                if (currentKeyboardState.IsKeyDown(Keys.A) && previousKeyboardState.IsKeyUp(Keys.A))
-                    playerGridX--;
+                if (currentKeyboardState.IsKeyDown(Keys.D) && PreviousKeyboardState.IsKeyUp(Keys.D))
+                    PlayerGridX++;
 
-                if (currentKeyboardState.IsKeyDown(Keys.D) && previousKeyboardState.IsKeyUp(Keys.D))
-                    playerGridX++;
+                float logicalWidth = GraphicsDevice.Viewport.Width / Scale;
+                float logicalHeight = GraphicsDevice.Viewport.Height / Scale;
 
-                float logicalWidth = GraphicsDevice.Viewport.Width / scale;
-                float logicalHeight = GraphicsDevice.Viewport.Height / scale;
+                int maxGridX = (int)((logicalWidth - TileSize) / TileSize);
+                int maxGridY = (int)((logicalHeight - TileSize) / TileSize);
 
-                int maxGridX = (int)((logicalWidth - tileSize) / tileSize);
-                int maxGridY = (int)((logicalHeight - tileSize) / tileSize);
-
-                playerGridX = MathHelper.Clamp(playerGridX, 0, maxGridX);
-                playerGridY = MathHelper.Clamp(playerGridY, 0, maxGridY);
+                PlayerGridX = MathHelper.Clamp(PlayerGridX, 0, maxGridX);
+                PlayerGridY = MathHelper.Clamp(PlayerGridY, 0, maxGridY);
 
                 UpdateSpritePosition();
-
-                previousKeyboardState = currentKeyboardState;
             }
+
+            PreviousKeyboardState = currentKeyboardState;
 
             base.Update(gameTime);
         }
@@ -183,35 +189,35 @@ namespace Ecalpon
         {
             GraphicsDevice.Clear(Color.Black);
 
-            if (_inCombat)
+            if (InCombat)
             {
-                spriteBatch.Begin();
-                _combatScreen.Draw(gameTime);
-                spriteBatch.End();
+                SpriteBatch.Begin();
+                CombatScreen.Draw(gameTime);
+                SpriteBatch.End();
             }
             else
             {
-                Matrix scaleMatrix = Matrix.CreateScale(scale);
+                Matrix scaleMatrix = Matrix.CreateScale(Scale);
 
-                spriteBatch.Begin(
+                SpriteBatch.Begin(
                     transformMatrix: scaleMatrix,
                     samplerState: SamplerState.PointClamp
                 );
 
-                float logicalWidth = GraphicsDevice.Viewport.Width / scale;
-                float logicalHeight = GraphicsDevice.Viewport.Height / scale;
+                float logicalWidth = GraphicsDevice.Viewport.Width / Scale;
+                float logicalHeight = GraphicsDevice.Viewport.Height / Scale;
 
-                int tilesX = (int)(logicalWidth / tileSize) + 2;
-                int tilesY = (int)(logicalHeight / tileSize) + 2;
+                int tilesX = (int)(logicalWidth / TileSize) + 2;
+                int tilesY = (int)(logicalHeight / TileSize) + 2;
 
-                int startX = Math.Max(0, playerGridX - tilesX / 2);
-                int startY = Math.Max(0, playerGridY - tilesY / 2);
+                int startX = Math.Max(0, PlayerGridX - tilesX / 2);
+                int startY = Math.Max(0, PlayerGridY - tilesY / 2);
                 int endX = Math.Min(map.GetLength(1), startX + tilesX);
                 int endY = Math.Min(map.GetLength(0), startY + tilesY);
 
                 Vector2 cameraOffset = new Vector2(
-                    (GraphicsDevice.Viewport.Width / scale / 2) - tileSize / 2 - (playerGridX * tileSize),
-                    (GraphicsDevice.Viewport.Height / scale / 2) - tileSize / 2 - (playerGridY * tileSize)
+                    (GraphicsDevice.Viewport.Width / Scale / 2) - TileSize / 2 - (PlayerGridX * TileSize),
+                    (GraphicsDevice.Viewport.Height / Scale / 2) - TileSize / 2 - (PlayerGridY * TileSize)
                 );
 
                 for (int y = startY; y < endY; y++)
@@ -221,20 +227,20 @@ namespace Ecalpon
                         int tileId = map[y, x];
 
                         Rectangle sourceRect = new Rectangle(
-                            (tileId % TilesPerRow) * (int)tileSize,
-                            (tileId / TilesPerRow) * (int)tileSize,
-                            (int)tileSize,
-                            (int)tileSize
+                            (tileId % TilesPerRow) * (int)TileSize,
+                            (tileId / TilesPerRow) * (int)TileSize,
+                            (int)TileSize,
+                            (int)TileSize
                         );
 
-                        Vector2 pos = new Vector2(x * tileSize, y * tileSize) + cameraOffset;
-                        spriteBatch.Draw(tileset, pos, sourceRect, Color.White);
+                        Vector2 pos = new Vector2(x * TileSize, y * TileSize) + cameraOffset;
+                        SpriteBatch.Draw(Tileset, pos, sourceRect, Color.White);
                     }
                 }
 
-                spriteBatch.Draw(
-                    rogueSword,
-                    spritePosition + cameraOffset,
+                SpriteBatch.Draw(
+                    RogueSword,
+                    SpritePosition + cameraOffset,
                     null,
                     Color.White,
                     0f,
@@ -244,7 +250,7 @@ namespace Ecalpon
                     0f
                 );
 
-                spriteBatch.End();
+                SpriteBatch.End();
             }
 
             base.Draw(gameTime);
@@ -252,7 +258,7 @@ namespace Ecalpon
 
         private void UpdateSpritePosition()
         {
-            spritePosition = new Vector2(playerGridX * tileSize, playerGridY * tileSize);
+            SpritePosition = new Vector2(PlayerGridX * TileSize, PlayerGridY * TileSize);
         }
     }
 }

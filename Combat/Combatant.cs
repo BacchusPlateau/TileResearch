@@ -16,14 +16,12 @@ namespace Ecalpon.Combat
     public class Combatant
     {
 
-        // --- Identity ---
+        
         public string Name { get; set; }
         public CombatantType Type { get; set; }
-
-        // --- Position on the combat grid ---
         public int GridRow { get; set; }
         public int GridCol { get; set; }
-
+        public WeaponType WeaponType { get; set; }
         public int MaxAttacks { get; set; }
         public int AttacksRemainingThisTurn { get; set;  }
         public int HitPoints { get; set; }
@@ -64,6 +62,7 @@ namespace Ecalpon.Combat
         public Combatant()
         {
             MaxAttacks = 1;
+            WeaponType = WeaponType.Melee;
         }
 
         public void StartTurn()

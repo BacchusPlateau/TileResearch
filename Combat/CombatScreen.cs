@@ -7,25 +7,15 @@ namespace Ecalpon.Combat
 {
     public class CombatScreen
     {
-        // =====================================================
-        // DEPENDENCIES
-        // =====================================================
 
-        private CombatManager _manager;
-        private SpriteBatch _spriteBatch;
-        private SpriteFont _font;
-        private Texture2D _pixel;
+        private CombatManager Manager;
+        private SpriteBatch SpriteBatch;
+        private SpriteFont Font;
+        private Texture2D Pixel;
+        public CombatState CurrentState => Manager.CurrentState;
 
-        // =====================================================
-        // INPUT TRACKING
-        // =====================================================
-
-        private KeyboardState _currentKeys;
-        private KeyboardState _previousKeys;
-
-        // =====================================================
-        // GRID CONSTANTS
-        // =====================================================
+        private KeyboardState CurrentKeys;
+        private KeyboardState PreviousKeys;
 
         private const int GRID_COLS = 16;
         private const int GRID_ROWS = 16;
@@ -35,19 +25,15 @@ namespace Ecalpon.Combat
         private const int PANEL_X = GRID_ORIGIN_X + (GRID_COLS * TILE_SIZE) + 16;
         private const int PANEL_Y = 16;
 
-        // =====================================================
-        // CONSTRUCTOR
-        // =====================================================
-
         public CombatScreen(SpriteBatch spriteBatch, SpriteFont font,
                             GraphicsDevice graphicsDevice)
         {
-            _spriteBatch = spriteBatch;
-            _font = font;
-            _manager = new CombatManager();
+            SpriteBatch = spriteBatch;
+            Font = font;
+            Manager = new CombatManager();
 
-            _pixel = new Texture2D(graphicsDevice, 1, 1);
-            _pixel.SetData(new Color[] { Color.White });
+            Pixel = new Texture2D(graphicsDevice, 1, 1);
+            Pixel.SetData(new Color[] { Color.White });
         }
 
         // =====================================================
@@ -57,49 +43,114 @@ namespace Ecalpon.Combat
         public void BeginCombat(List<Combatant> playerParty,
                                 List<Combatant> enemies)
         {
-            _manager.StartCombat(playerParty, enemies);
+            Manager.StartCombat(playerParty, enemies);
         }
 
-        // =====================================================
-        // UPDATE
-        // =====================================================
+        private void DrawTargetCursor()
+        {
+            if (Manager.CurrentState != CombatState.SelectingTarget)
+                return;
+
+            Rectangle cursorRect = new Rectangle(
+                GRID_ORIGIN_X + (Manager.CursorCol * TILE_SIZE),
+                GRID_ORIGIN_Y + (Manager.CursorRow * TILE_SIZE),
+                TILE_SIZE - 1,
+                TILE_SIZE - 1
+            );
+
+            DrawCursorOutline(cursorRect, Color.Red);
+        }
+
+        private void DrawCursorOutline(Rectangle rect, Color color)
+        {
+            int thickness = 2;
+
+            DrawFilledRect(new Rectangle(rect.X, rect.Y, rect.Width, thickness), color);
+            DrawFilledRect(new Rectangle(rect.X, rect.Y + rect.Height - thickness, rect.Width, thickness), color);
+            DrawFilledRect(new Rectangle(rect.X, rect.Y, thickness, rect.Height), color);
+            DrawFilledRect(new Rectangle(rect.X + rect.Width - thickness, rect.Y, thickness, rect.Height), color);
+        }
 
         public void Update(GameTime gameTime)
         {
-            _previousKeys = _currentKeys;
-            _currentKeys = Keyboard.GetState();
+            PreviousKeys = CurrentKeys;
+            CurrentKeys = Keyboard.GetState();
 
             // The game only responds to input on the player's turn
             // On the enemy turn we resolve immediately and wait
             // for the player again — no timing, no delays
 
-            if (_manager.CurrentState == CombatState.PlayerTurn)
+            if (Manager.CurrentState == CombatState.PlayerTurn)
                 HandlePlayerInput();
 
-            if (_manager.CurrentState == CombatState.EnemyTurn)
+            if (Manager.CurrentState == CombatState.EnemyTurn)
                 ResolveEnemyTurn();
 
-            if (_manager.CurrentState == CombatState.SelectingTarget)
+            if (Manager.CurrentState == CombatState.SelectingTarget)
                 HandlePlayerTargeting();
+        }
+
+        public void Draw(GameTime gameTime)
+        {
+            DrawGrid();
+            DrawCombatants();
+            DrawTargetCursor();
+            DrawMessagePanel();
+            DrawActionMenu();
         }
 
         private void HandlePlayerTargeting()
         {
-            if (WasKeyJustPressed(Keys.Up) || WasKeyJustPressed(Keys.Right))
+            if (WasKeyJustPressed(Keys.Up))
             {
-               //cycle DOWN in list of enemies
+                Manager.MoveCursor(-1, 0);
                 return;
             }
 
-            if (WasKeyJustPressed(Keys.Down) || WasKeyJustPressed(Keys.Left))
+            if (WasKeyJustPressed(Keys.Down))
             {
-                //cycle UP in list of enemies
+                Manager.MoveCursor(1, 0);
                 return;
             }
 
-            if(WasKeyJustPressed(Keys.Enter))
+            if (WasKeyJustPressed(Keys.Left))
             {
-                //target acquired, determine is valid
+                Manager.MoveCursor(0, -1);
+                return;
+            }
+
+            if (WasKeyJustPressed(Keys.Right))
+            {
+                Manager.MoveCursor(0, 1);
+                return;
+            }
+
+            if (WasKeyJustPressed(Keys.Enter))
+            {
+                if (Manager.TryConfirmTarget(out Combatant target))
+                {
+                    Combatant attacker = Manager.CurrentCombatant();
+
+                    if (Manager.RollToHit(attacker, target))
+                    {
+                        int damage = Manager.RollDamage(attacker);
+                        Manager.ApplyDamage(target, damage);
+                    }
+
+                    attacker.AttacksRemainingThisTurn--;
+
+                    if (attacker.HasActedThisTurn)
+                        Manager.EndCurrentTurn();
+                    else
+                        Manager.CancelTargeting();
+                }
+
+                return;
+            }
+
+            if (WasKeyJustPressed(Keys.Escape))
+            {
+                Manager.CancelTargeting();
                 return;
             }
         }
@@ -108,62 +159,38 @@ namespace Ecalpon.Combat
         {
             if (WasKeyJustPressed(Keys.A))
             {
-                _manager.TransitionTo(CombatState.SelectingTarget);
+                Manager.TransitionTo(CombatState.SelectingTarget);
                 return;
             }
 
             if (WasKeyJustPressed(Keys.M))
             {
-                _manager.TransitionTo(CombatState.SelectingMove);
+                Manager.TransitionTo(CombatState.SelectingMove);
                 return;
             }
 
             if (WasKeyJustPressed(Keys.P))
             {
-                _manager.TransitionTo(CombatState.UsingPower);
+                Manager.TransitionTo(CombatState.UsingPower);
                 return;
             }
 
             if (WasKeyJustPressed(Keys.Space))
-                _manager.EndCurrentTurn();
+                Manager.EndCurrentTurn();
         }
-
-        // =====================================================
-        // ENEMY TURN
-        // =====================================================
 
         private void ResolveEnemyTurn()
         {
             // Enemy does nothing yet — just passes their turn
             // AI behavior gets built here later, one piece at a time
-            _manager.EndCurrentTurn();
+            Manager.EndCurrentTurn();
         }
-
-        // =====================================================
-        // INPUT HELPER
-        // =====================================================
 
         private bool WasKeyJustPressed(Keys key)
         {
-            return _currentKeys.IsKeyDown(key)
-                && _previousKeys.IsKeyUp(key);
+            return CurrentKeys.IsKeyDown(key)
+                && PreviousKeys.IsKeyUp(key);
         }
-
-        // =====================================================
-        // DRAW
-        // =====================================================
-
-        public void Draw(GameTime gameTime)
-        {
-            DrawGrid();
-            DrawCombatants();
-            DrawMessagePanel();
-            DrawActionMenu();
-        }
-
-        // =====================================================
-        // DRAW THE GRID
-        // =====================================================
 
         private void DrawGrid()
         {
@@ -195,9 +222,9 @@ namespace Ecalpon.Combat
 
         private void DrawCombatants()
         {
-            Combatant current = _manager.CurrentCombatant();
+            Combatant current = Manager.CurrentCombatant();
 
-            foreach (Combatant combatant in _manager.GetAliveCombatants())
+            foreach (Combatant combatant in Manager.GetAliveCombatants())
             {
                 Rectangle combatantRect = new Rectangle(
                     GRID_ORIGIN_X + (combatant.GridCol * TILE_SIZE) + 4,
@@ -229,8 +256,8 @@ namespace Ecalpon.Combat
                 DrawFilledRect(combatantRect, combatantColor);
 
                 // Draw first initial
-                _spriteBatch.DrawString(
-                    _font,
+                SpriteBatch.DrawString(
+                    Font,
                     combatant.Name.Substring(0, 1),
                     new Vector2(combatantRect.X + 6, combatantRect.Y + 4),
                     Color.White
@@ -247,18 +274,18 @@ namespace Ecalpon.Combat
             Rectangle panelRect = new Rectangle(PANEL_X, PANEL_Y, 280, 300);
             DrawFilledRect(panelRect, new Color(20, 20, 30));
 
-            _spriteBatch.DrawString(
-                _font,
+            SpriteBatch.DrawString(
+                Font,
                 "-- Combat Log --",
                 new Vector2(PANEL_X + 8, PANEL_Y + 8),
                 Color.Gold
             );
 
             int lineY = PANEL_Y + 30;
-            foreach (string message in _manager.RecentMessages)
+            foreach (string message in Manager.RecentMessages)
             {
-                _spriteBatch.DrawString(
-                    _font,
+                SpriteBatch.DrawString(
+                    Font,
                     message,
                     new Vector2(PANEL_X + 8, lineY),
                     Color.LightGray
@@ -279,32 +306,32 @@ namespace Ecalpon.Combat
             Rectangle menuRect = new Rectangle(menuX, menuY, 280, 160);
             DrawFilledRect(menuRect, new Color(20, 20, 30));
 
-            _spriteBatch.DrawString(
-                _font,
+            SpriteBatch.DrawString(
+                Font,
                 "-- Actions --",
                 new Vector2(menuX + 8, menuY + 8),
                 Color.Gold
             );
 
-            if (_manager.CurrentState == CombatState.PlayerTurn)
+            if (Manager.CurrentState == CombatState.PlayerTurn)
             {
-                _spriteBatch.DrawString(_font, "[A] Attack",
+                SpriteBatch.DrawString(Font, "[A] Attack",
                     new Vector2(menuX + 8, menuY + 30), Color.White);
 
-                _spriteBatch.DrawString(_font, "[M] Move",
+                SpriteBatch.DrawString(Font, "[M] Move",
                     new Vector2(menuX + 8, menuY + 52), Color.White);
 
-                _spriteBatch.DrawString(_font, "[P] Use Power",
+                SpriteBatch.DrawString(Font, "[P] Use Power",
                     new Vector2(menuX + 8, menuY + 74), Color.White);
 
-                _spriteBatch.DrawString(_font, "[Space] End Turn",
+                SpriteBatch.DrawString(Font, "[Space] End Turn",
                     new Vector2(menuX + 8, menuY + 96), Color.White);
             }
             else
             {
-                _spriteBatch.DrawString(
-                    _font,
-                    _manager.CurrentState.ToString(),
+                SpriteBatch.DrawString(
+                    Font,
+                    Manager.CurrentState.ToString(),
                     new Vector2(menuX + 8, menuY + 30),
                     Color.Yellow
                 );
@@ -317,7 +344,7 @@ namespace Ecalpon.Combat
 
         private void DrawFilledRect(Rectangle rect, Color color)
         {
-            _spriteBatch.Draw(_pixel, rect, color);
+            SpriteBatch.Draw(Pixel, rect, color);
         }
     }
 }

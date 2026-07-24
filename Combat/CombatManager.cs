@@ -1,47 +1,113 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Ecalpon.Combat
 {
     public class CombatManager
     {
-        // --- The one truth about what's happening right now ---
         public CombatState CurrentState { get; private set; }
 
-        // --- Everyone who participates in this fight ---
-        private List<Combatant> _combatants = new List<Combatant>();
+        private List<Combatant> Combatants = new List<Combatant>();
 
-        // --- Whose turn is it ---
-        private int _currentCombatantIndex = 0;
+        private int CurrentCombatantIndex = 0;
 
-        // --- Messages for the feedback panel ---
-        private List<string> _displayLog = new List<string>();
-        public IReadOnlyList<string> RecentMessages => _displayLog;
+        private List<string> DisplayLog = new List<string>();
 
-        // --- Random number generator ---
-        private System.Random _rng = new System.Random();
+        public IReadOnlyList<string> RecentMessages => DisplayLog;
 
-        // =====================================================
-        // INITIALIZATION
-        // =====================================================
+        private System.Random RNG = new System.Random();
 
-        public void StartCombat(List<Combatant> playerParty,
-                                List<Combatant> enemies)
+        private const int GRID_ROWS = 16;
+        private const int GRID_COLS = 16;
+
+        public int CursorRow { get; private set; }
+        public int CursorCol { get; private set; }
+
+        public bool TryConfirmTarget(out Combatant target)
         {
-            _combatants.Clear();
-            _combatants.AddRange(playerParty);
-            _combatants.AddRange(enemies);
+            target = GetCombatantAt(CursorRow, CursorCol);
 
-            RollInitiative();
-            _currentCombatantIndex = 0;
+            if (target == null)
+            {
+                AddMessage("No target there.");
+                return false;
+            }
 
-            TransitionTo(CombatState.Initializing);
-            TransitionTo(CombatState.PlayerTurn);
+            if (!target.IsAlive)
+            {
+                AddMessage(target.Name + " is already down.");
+                target = null;
+                return false;
+            }
+
+            if (target.IsPlayerControlled)
+            {
+                AddMessage("You can't attack " + target.Name + ".");
+                target = null;
+                return false;
+            }
+
+            Combatant attacker = CurrentCombatant();
+            int rowDistance = Math.Abs(target.GridRow - attacker.GridRow);
+            int colDistance = Math.Abs(target.GridCol - attacker.GridCol);
+
+            if (rowDistance > 1 || colDistance > 1)
+            {
+                AddMessage(target.Name + " is out of melee range.");
+                target = null;
+                return false;
+            }
+
+            return true;
         }
 
-        // =====================================================
-        // STATE MACHINE — the heart of everything
-        // =====================================================
+        private Combatant GetCombatantAt(int row, int col)
+        {
+            return Combatants.FirstOrDefault(c => c.IsAlive && c.GridRow == row && c.GridCol == col);
+        }
+
+        public void BeginMeleeTargeting(Combatant attacker)
+        {
+            CursorRow = attacker.GridRow;
+            CursorCol = attacker.GridCol;
+        }
+
+        public void MoveCursor(int rowDelta, int colDelta)
+        {
+            int newRow = CursorRow + rowDelta;
+            int newCol = CursorCol + colDelta;
+
+            if (newRow < 0)
+                newRow = 0;
+            else if (newRow >= GRID_ROWS)
+                newRow = GRID_ROWS - 1;
+
+            if (newCol < 0)
+                newCol = 0;
+            else if (newCol >= GRID_COLS)
+                newCol = GRID_COLS - 1;
+
+            CursorRow = newRow;
+            CursorCol = newCol;
+        }
+
+        public void StartCombat(List<Combatant> playerParty, List<Combatant> enemies)
+        {
+            Combatants.Clear();
+            Combatants.AddRange(playerParty);
+            Combatants.AddRange(enemies);
+
+            RollInitiative();
+            CurrentCombatantIndex = 0;
+
+            TransitionTo(CombatState.Initializing);
+
+            if (CurrentCombatant().IsPlayerControlled)
+                TransitionTo(CombatState.PlayerTurn);
+            else
+                TransitionTo(CombatState.EnemyTurn);
+        }
 
         public void TransitionTo(CombatState newState)
         {
@@ -64,6 +130,10 @@ namespace Ecalpon.Combat
                 case CombatState.Defeat:
                     AddMessage("Your party has fallen...");
                     break;
+
+                case CombatState.SelectingTarget:
+                    BeginMeleeTargeting(CurrentCombatant());
+                    break;
             }
         }
 
@@ -73,10 +143,10 @@ namespace Ecalpon.Combat
 
         private void RollInitiative()
         {
-            foreach (var combatant in _combatants)
-                combatant.Initiative = _rng.Next(1, 20) + combatant.Level;
+            foreach (var combatant in Combatants)
+                combatant.Initiative = RNG.Next(1, 20) + combatant.Level;
 
-            _combatants = _combatants
+            Combatants = Combatants
                 .OrderByDescending(c => c.Initiative)
                 .ToList();
         }
@@ -97,10 +167,10 @@ namespace Ecalpon.Combat
 
         public Combatant CurrentCombatant()
         {
-            if (_combatants.Count == 0)
+            if (Combatants.Count == 0)
                 return null;
 
-            return _combatants[_currentCombatantIndex];
+            return Combatants[CurrentCombatantIndex];
         }
 
         public void EndCurrentTurn()
@@ -122,10 +192,10 @@ namespace Ecalpon.Combat
 
         public string LastMessage()
         {
-            if (_displayLog.Count == 0)
+            if (DisplayLog.Count == 0)
                 return "";
 
-            return _displayLog[_displayLog.Count - 1];
+            return DisplayLog[DisplayLog.Count - 1];
         }
 
         private void AdvanceToNextCombatant()
@@ -134,19 +204,19 @@ namespace Ecalpon.Combat
 
             do
             {
-                _currentCombatantIndex++;
+                CurrentCombatantIndex++;
 
-                if (_currentCombatantIndex >= _combatants.Count)
-                    _currentCombatantIndex = 0;
+                if (CurrentCombatantIndex >= Combatants.Count)
+                    CurrentCombatantIndex = 0;
 
                 attempts++;
 
-            } while (!_combatants[_currentCombatantIndex].IsAlive
-                     && attempts <= _combatants.Count);
+            } while (!Combatants[CurrentCombatantIndex].IsAlive
+                     && attempts <= Combatants.Count);
 
             Combatant next = CurrentCombatant();
 
-            System.Diagnostics.Debug.WriteLine("Next combatant: " + next.Name + " index: " + _currentCombatantIndex);
+            System.Diagnostics.Debug.WriteLine("Next combatant: " + next.Name + " index: " + CurrentCombatantIndex);
 
             if (next.IsPlayerControlled)
                 TransitionTo(CombatState.PlayerTurn);
@@ -160,7 +230,7 @@ namespace Ecalpon.Combat
 
         public bool RollToHit(Combatant attacker, Combatant defender)
         {
-            int roll = _rng.Next(1, 21);
+            int roll = RNG.Next(1, 21);
             int needed = attacker.ThacO - defender.ArmorClass;
 
             if (roll >= needed)
@@ -179,7 +249,7 @@ namespace Ecalpon.Combat
 
         public int RollDamage(Combatant attacker)
         {
-            int damage = _rng.Next(attacker.DamageMin, attacker.DamageMax + 1)
+            int damage = RNG.Next(attacker.DamageMin, attacker.DamageMax + 1)
                          + attacker.DamageBonus;
 
             return damage;
@@ -206,14 +276,14 @@ namespace Ecalpon.Combat
 
         private bool AllEnemiesDefeated()
         {
-            return _combatants
+            return Combatants
                 .Where(c => c.Type == CombatantType.Enemy)
                 .All(c => !c.IsAlive);
         }
 
         private bool AllPlayerCombatantsDefeated()
         {
-            return _combatants
+            return Combatants
                 .Where(c => c.IsPlayerControlled)
                 .All(c => !c.IsAlive);
         }
@@ -224,15 +294,20 @@ namespace Ecalpon.Combat
 
         private void AddMessage(string message)
         {
-            _displayLog.Add(message);
+            DisplayLog.Add(message);
 
-            if (_displayLog.Count > 8)
-                _displayLog.RemoveAt(0);
+            if (DisplayLog.Count > 8)
+                DisplayLog.RemoveAt(0);
         }
 
         public IEnumerable<Combatant> GetAliveCombatants()
         {
-            return _combatants.Where(c => c.IsAlive);
+            return Combatants.Where(c => c.IsAlive);
+        }
+
+        public void CancelTargeting()
+        {
+            CurrentState = CombatState.PlayerTurn;
         }
     }
 }
